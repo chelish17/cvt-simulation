@@ -1,0 +1,150 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CVT無段變速系統模擬</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        canvas {
+            border: 1px solid #000;
+            margin-top: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .controls label {
+            font-size: 18px;
+            margin-right: 10px;
+        }
+        .controls input {
+            width: 200px;
+        }
+        .info {
+            margin-top: 20px;
+            max-width: 600px;
+            text-align: left;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <label for="throttle">油門大小 (0-100%):</label>
+        <input type="range" id="throttle" min="0" max="100" value="0" oninput="updateThrottle(this.value)">
+        <span id="throttleValue">0%</span>
+    </div>
+    <div class="info">
+        <p><strong>說明：</strong></p>
+        <p>此模擬展示CVT無段變速系統的工作原理。調整油門滑桿（0-100%）可改變引擎轉速，進而影響前普利盤（左）與後普利盤（右）的大小，以及V型皮帶的位置。</p>
+        <ul>
+            <li><strong>低油門（低轉速）：</strong>前普利盤間距大，皮帶靠近軸心，模擬低檔位（高減速比）；後普利盤間距小，皮帶在外側。</li>
+            <li><strong>高油門（高轉速）：</strong>前普利盤間距縮小，皮帶被推向外側，模擬高檔位（低減速比）；後普利盤間距增大，皮帶靠近軸心。</li>
+        </ul>
+        <p>皮帶以黑色線條表示，連動前後普利盤，模擬動力傳遞。</p>
+    </div>
+    <script>
+        let throttle = 0;
+
+        function updateThrottle(value) {
+            throttle = value;
+            document.getElementById('throttleValue').textContent = `${value}%`;
+        }
+
+        function setup() {
+            createCanvas(600, 400);
+            textAlign(CENTER, CENTER);
+            textSize(14);
+        }
+
+        function draw() {
+            background(220);
+
+            // 計算前後普利盤的半徑（模擬CVT變速）
+            let frontRadius = map(throttle, 0, 100, 80, 120); // 前普利盤隨油門變大而增大
+            let rearRadius = map(throttle, 0, 100, 120, 80); // 後普利盤隨油門變大而縮小
+
+            // 繪製前普利盤（左）
+            fill(100, 100, 255); // 藍色
+            ellipse(150, 200, frontRadius * 2, frontRadius * 2);
+            fill(255);
+            ellipse(150, 200, 20, 20); // 軸心
+            text("前普利盤", 150, 300);
+            text(`半徑: ${Math.round(frontRadius)}px`, 150, 320);
+
+            // 繪製後普利盤（右）
+            fill(255, 100, 100); // 紅色
+            ellipse(450, 200, rearRadius * 2, rearRadius * 2);
+            fill(255);
+            ellipse(450, 200, 20, 20); // 軸心
+            text("後普利盤", 450, 300);
+            text(`半徑: ${Math.round(rearRadius)}px`, 450, 320);
+
+            // 繪製V型皮帶（簡化為線條）
+            stroke(0);
+            strokeWeight(5);
+            // 皮帶位置隨普利盤半徑變化
+            let frontBeltY = 200 - frontRadius; // 前普利盤皮帶位置（上側）
+            let rearBeltY = 200 - rearRadius; // 後普利盤皮帶位置（上側）
+            line(150, frontBeltY, 450, rearBeltY); // 上側皮帶
+            line(150, 200 + frontRadius, 450, 200 + rearRadius); // 下側皮帶
+            noStroke();
+
+            // 顯示油門狀態
+            fill(0);
+            text(`油門: ${throttle}%`, 300, 50);
+            text(`模擬減速比: ${((rearRadius / frontRadius).toFixed(2))}:1`, 300, 70);
+        }
+    </script>
+</body>
+</html>
